@@ -1,0 +1,31 @@
+# deps / builds
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+
+# local data (embedded postgres, uploads)
+.data/
+
+# tests
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# misc
+.DS_Store
+*.pem
+*.log
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# generated Prisma client (recreated by `npm install` / prisma generate)
+src/generated/
