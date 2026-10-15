@@ -166,7 +166,7 @@ All variables are documented in [.env.example](.env.example). Highlights:
 | Variable | Required | Purpose |
 | --- | :-: | --- |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `AUTH_SECRET` | ✅ | Session JWT signing key |
+| `AUTH_SECRET` | ✅ | Session JWT signing key — if missing, all `/api/auth/*` calls 500 and `/login?error=Configuration` appears |
 | `APP_URL` | ✅ | Canonical URL for emails/OAuth redirects |
 | `GOOGLE_CLIENT_ID/SECRET` | | Google sign-in |
 | `RESEND_API_KEY` / `EMAIL_FROM` | | Transactional email (console fallback in dev) |
@@ -177,7 +177,8 @@ All variables are documented in [.env.example](.env.example). Highlights:
 
 ## Documentation
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) — production deployment guide
+- [DEPLOYMENT.md](DEPLOYMENT.md) — production deployment guide (incl. platform notes and
+  [troubleshooting](DEPLOYMENT.md#10-troubleshooting) for auth `500 / Configuration` errors)
 - [docs/METRICS.md](docs/METRICS.md) — report/metric definitions
 - [docs/GITHUB_SETUP.md](docs/GITHUB_SETUP.md) — GitHub integration setup
 

@@ -4,10 +4,15 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { authConfig } from "@/lib/auth/auth.config";
+import { assertRuntimeEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { loginSchema } from "@/lib/validation";
 import { logger } from "@/lib/logger";
+
+// Log a precise reason (never a value) when auth-critical env vars are missing.
+// Without this, Auth.js only surfaces `500 /login?error=Configuration`.
+assertRuntimeEnv("auth");
 
 const providers: Provider[] = [];
 

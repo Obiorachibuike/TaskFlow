@@ -32,6 +32,18 @@ APP_URL=https://taskflow.example.com
 AUTH_TRUST_HOST=1
 ```
 
+`AUTH_SECRET` is **not optional**: without it Auth.js rejects every request to
+`/api/auth/*` with `500 {"message":"There was a problem with the server configuration…"}`
+and bounces the browser to `/login?error=Configuration` — sign-in, registration
+and session restore all fail. Generate one with `openssl rand -base64 32` and set
+it for **every** environment you deploy (on Vercel: Project → Settings →
+Environment Variables → add for Production *and* Preview, then redeploy — env
+changes do not apply to already-built deployments).
+
+`AUTH_TRUST_HOST=1` is required in production behind any proxy you run yourself
+(nginx, Caddy, ALB). Vercel and Cloudflare Pages are auto-detected by Auth.js, so
+it is optional there — but harmless to set.
+
 Production checklist (all documented in `.env.example`):
 
 | Area | Variables | If missing |
@@ -99,9 +111,15 @@ Redis-backed.
 
 ## 8. Platform notes
 
-- **Vercel/Netlify/serverless**: not a fit as-is — Socket.IO and the scheduler need a
-  long-lived Node server. Use Railway, Render, Fly.io, ECS/Fargate, Cloud Run
-  (with min-instances ≥ 1 and CPU always allocated), or a VM.
+- **Vercel/Netlify/serverless**: the Next.js app itself deploys and runs fine —
+  pages, API routes, Auth.js and Prisma all work. What does **not** run is
+  `server.ts`, because those platforms ignore custom servers: no Socket.IO
+  endpoint (realtime board updates degrade to `router.refresh()` on the client's
+  next navigation) and no background job scheduler (due-date reminder emails stop).
+  Acceptable for a demo/preview; for production use Railway, Render, Fly.io,
+  ECS/Fargate, Cloud Run (with min-instances ≥ 1 and CPU always allocated), or a VM
+  so `npm start` runs the full server. If you must stay serverless, host the
+  realtime layer separately (see §7) and run jobs on a cron/queue worker.
 - **Docker**: any Node 20 image works. Build stage: `npm ci && npm run build`. Run stage:
   `npm start` with `node_modules` + `.next` + `src/generated/prisma`. Run migrations as an
   init container or entrypoint step.
@@ -119,6 +137,51 @@ Redis-backed.
    enabling them produces validated output.
 5. Point a GitHub webhook at `/api/integrations/github/webhook` with a secret and confirm
    deliveries are accepted only with a valid signature (see docs/GITHUB_SETUP.md).
+
+## 10. Troubleshooting
+
+### `GET /api/auth/session` → 500, browser shows `/login?error=Configuration`
+
+Symptom (from a real Vercel production request): the function invocation for
+`/api/auth/[...nextauth]` finishes in a few milliseconds, makes **no outgoing
+requests**, and responds `500 {"message":"There was a problem with the server
+configuration. Check the server logs for more information."}`. Auth.js redirects
+the browser to `pages.error` (`/login`) with `?error=Configuration`.
+
+Cause: Auth.js could not build a valid config for the request. It is almost always
+one of these, in order of likelihood:
+
+| Cause | Fix |
+| --- | --- |
+| `AUTH_SECRET` missing/empty **for that environment** (e.g. set for Preview only, or added after the last build) | Vercel → Project → Settings → Environment Variables → add `AUTH_SECRET` (`openssl rand -base64 32`) for Production *and* Preview → **Redeploy** |
+| `AUTH_TRUST_HOST` missing in production behind a self-managed proxy (Vercel/CF Pages are auto-trusted) | Set `AUTH_TRUST_HOST=1` and redeploy |
+| `DATABASE_URL` missing — `src/lib/prisma.ts` throws at import, before Auth.js runs | Set `DATABASE_URL` (and run migrations, §4) and redeploy |
+
+Diagnosis: the app logs the reason itself. Look for these entries in the function
+logs (they name variables, never values):
+
+```json
+{"level":"error","message":"env.missing_required_variables","context":"auth","missing":["AUTH_SECRET"],"serverless":true,"hint":"…"}
+{"level":"error","message":"auth.route.configuration_error","path":"/api/auth/session","status":500,"missing":["AUTH_SECRET"]}
+```
+
+If `missing` is empty, the Auth.js error line printed just above
+(`MissingSecret`, `UntrustedHost`, …) identifies the problem — see
+https://errors.authjs.dev.
+
+Verify the fix without a browser: `GET /api/auth/session` should return
+`200` with body `null` when signed out (a JSON object with `user` when signed in),
+and `GET /api/auth/providers` should return `200`. Any 500 on those two routes
+still means configuration, not application code.
+
+### Other common post-deploy failures
+
+| Symptom | Cause / fix |
+| --- | --- |
+| Board does not live-update, `/socket.io/*` returns 404 | Serverless host: `server.ts` never runs (§8). Use a long-lived Node host or a separate realtime service |
+| No reminder emails | Same reason (scheduler lives in `server.ts`), or `RESEND_API_KEY` unset — emails then only log to stdout |
+| `prisma generate` fails during `npm ci` in CI | Needs no database, but Prisma 7 loads `prisma.config.ts`; the config now falls back to a placeholder URL, so generation works without `DATABASE_URL` |
+| Google sign-in button missing | `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` not set for that environment (email/password still works) |
 
 ## Security notes
 
