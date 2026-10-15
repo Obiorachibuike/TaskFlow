@@ -6,11 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
-import { Loader2, MailCheck, KeyRound, ArrowLeft, Globe } from "lucide-react";
+import { Loader2, MailCheck, KeyRound, ArrowLeft, Globe, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import { describeAuthError } from "@/lib/auth/errors";
 import {
   registerSchema,
   loginSchema,
@@ -62,6 +63,9 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const form = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
   const registered = params.get("registered");
   const callbackUrl = params.get("callbackUrl") ?? "/app";
+  // Auth.js redirects here with ?error=<code> (e.g. Configuration when
+  // AUTH_SECRET is missing) — surface it instead of ignoring it.
+  const authError = describeAuthError(params.get("error"));
 
   async function onSubmit(values: LoginInput) {
     setSubmitting(true);
@@ -110,6 +114,19 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
     <div className="rounded-xl border border-border-subtle bg-surface p-6 shadow-sm">
       <h1 className="text-xl font-semibold tracking-tight">Welcome back</h1>
       <p className="mt-1 text-sm text-muted">Sign in to your TaskFlow workspace.</p>
+
+      {authError && (
+        <div
+          role="alert"
+          className="mt-4 flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+          <div>
+            <p className="font-medium text-foreground">{authError.title}</p>
+            <p className="mt-0.5 text-muted">{authError.description}</p>
+          </div>
+        </div>
+      )}
 
       {registered && (
         <div className="mt-4 flex items-start gap-2 rounded-md border border-success/30 bg-success-soft px-3 py-2.5 text-sm">
